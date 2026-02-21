@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ALF Google Sheets API (Apps Script)",
-    "version": "1.0.4",
-    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nContract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). In this schema, readToken is REQUIRED in the JSON body for read ops.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
+    "version": "1.0.5",
+    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nContract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations enforce a valid read token. Code.gs accepts readToken from either query (?readToken=...) or request body field readToken.\n- Code.gs accepts wrapped payloads ({\"body\":{...}}) and unwrapped payloads ({...}). This schema allows both.\n- Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED."
   },
   "servers": [
     {
@@ -37,9 +37,8 @@
       "PriceQuoteLine": {
         "type": "object",
         "additionalProperties": true,
-        "description": "Flexible line schema. Server requires non-empty lines[] and uses line.item (not itemCode). qty may be coerced with Number().",
         "properties": {
-          "item": { "type": "string", "description": "Required item identifier per Apps Script (line.item)." },
+          "item": { "type": "string" },
           "qty": {
             "oneOf": [
               { "type": "number" },
@@ -57,7 +56,7 @@
         "additionalProperties": true,
         "properties": {
           "operation": { "const": "priceQuote" },
-          "readToken": { "type": "string" },
+          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
           "jobNumber": { "type": "string" },
           "lines": {
             "type": "array",
@@ -65,7 +64,7 @@
             "items": { "$ref": "#/components/schemas/PriceQuoteLine" }
           }
         },
-        "required": ["operation", "readToken", "lines"]
+        "required": ["operation", "lines"]
       },
 
       "GetJobBody": {
@@ -73,11 +72,11 @@
         "additionalProperties": true,
         "properties": {
           "operation": { "const": "getJob" },
-          "readToken": { "type": "string" },
+          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
           "jobNumber": { "type": "string" },
           "fields": { "type": "array", "items": { "type": "string" } }
         },
-        "required": ["operation", "readToken", "jobNumber"]
+        "required": ["operation", "jobNumber"]
       },
 
       "GetItemBody": {
@@ -85,11 +84,11 @@
         "additionalProperties": true,
         "properties": {
           "operation": { "const": "getItem" },
-          "readToken": { "type": "string" },
+          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
           "itemCode": { "type": "string" },
           "fields": { "type": "array", "items": { "type": "string" } }
         },
-        "required": ["operation", "readToken", "itemCode"]
+        "required": ["operation", "itemCode"]
       },
 
       "GetItemCostBody": {
@@ -97,10 +96,10 @@
         "additionalProperties": true,
         "properties": {
           "operation": { "const": "getItemCost" },
-          "readToken": { "type": "string" },
+          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
           "itemCode": { "type": "string" }
         },
-        "required": ["operation", "readToken", "itemCode"]
+        "required": ["operation", "itemCode"]
       },
 
       "SetJobFieldBody": {
@@ -134,7 +133,6 @@
       "CreateJobBody": {
         "type": "object",
         "additionalProperties": true,
-        "description": "Field names aligned to what Code.gs reads (customerFullName, customerAddress, etc.).",
         "properties": {
           "operation": { "const": "createJob" },
           "jobNumber": { "type": "string" },
@@ -160,8 +158,8 @@
         "properties": {
           "operation": { "const": "updateItemCost" },
           "itemCode": { "type": "string" },
-          "newUnitCost": { "type": "number", "description": "Matches Apps Script expected field name." },
-          "costEffectiveDate": { "type": "string", "description": "Matches Apps Script expected field name (date string)." },
+          "newUnitCost": { "type": "number" },
+          "costEffectiveDate": { "type": "string" },
           "requestedBy": { "type": "string" }
         },
         "required": ["operation", "itemCode", "newUnitCost", "costEffectiveDate", "requestedBy"]
@@ -210,24 +208,26 @@
         ]
       },
 
+      "OperationBody": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/PriceQuoteBody" },
+          { "$ref": "#/components/schemas/GetJobBody" },
+          { "$ref": "#/components/schemas/GetItemBody" },
+          { "$ref": "#/components/schemas/GetItemCostBody" },
+          { "$ref": "#/components/schemas/SetJobFieldBody" },
+          { "$ref": "#/components/schemas/UpdateJobStatusBody" },
+          { "$ref": "#/components/schemas/CreateJobBody" },
+          { "$ref": "#/components/schemas/UpdateItemCostBody" },
+          { "$ref": "#/components/schemas/UpdateItemFieldBody" },
+          { "$ref": "#/components/schemas/CreateItemBody" }
+        ]
+      },
+
       "RequestEnvelope": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "body": {
-            "oneOf": [
-              { "$ref": "#/components/schemas/PriceQuoteBody" },
-              { "$ref": "#/components/schemas/GetJobBody" },
-              { "$ref": "#/components/schemas/GetItemBody" },
-              { "$ref": "#/components/schemas/GetItemCostBody" },
-              { "$ref": "#/components/schemas/SetJobFieldBody" },
-              { "$ref": "#/components/schemas/UpdateJobStatusBody" },
-              { "$ref": "#/components/schemas/CreateJobBody" },
-              { "$ref": "#/components/schemas/UpdateItemCostBody" },
-              { "$ref": "#/components/schemas/UpdateItemFieldBody" },
-              { "$ref": "#/components/schemas/CreateItemBody" }
-            ]
-          }
+          "body": { "$ref": "#/components/schemas/OperationBody" }
         },
         "required": ["body"]
       }
@@ -246,22 +246,27 @@
             "name": "deploymentId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "Apps Script deployment ID. For runtime use, prefer hardcoding the real URL in your GPT Action config."
+            "schema": { "type": "string" }
           },
           {
             "name": "readToken",
             "in": "query",
             "required": false,
             "schema": { "type": "string" },
-            "description": "Optional here because readToken is enforced via body.readToken for read operations. Server accepts query or body."
+            "description": "Read token for read operations. Server accepts readToken in query or body."
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RequestEnvelope" }
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/RequestEnvelope" },
+                  { "$ref": "#/components/schemas/OperationBody" }
+                ],
+                "description": "Code.gs accepts both wrapped ({\"body\":{...}}) and unwrapped ({...}) JSON payloads."
+              }
             }
           }
         },
