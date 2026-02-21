@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ALF Google Sheets API (Apps Script)",
-    "version": "1.0.5",
-    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nContract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations enforce a valid read token. Code.gs accepts readToken from either query (?readToken=...) or request body field readToken.\n- Code.gs accepts wrapped payloads ({\"body\":{...}}) and unwrapped payloads ({...}). This schema allows both.\n- Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED."
+    "version": "1.0.2",
+    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nKey contract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken).\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
   },
   "servers": [
     {
@@ -25,174 +25,358 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "result": { "type": "string" },
-          "operation": { "type": "string" },
-          "message": { "type": "string" },
+          "result": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
           "data": {
-            "type": ["object", "array", "string", "number", "boolean", "null"]
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
           }
         }
       },
-
       "PriceQuoteLine": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "item": { "type": "string" },
+          "item": {
+            "type": "string"
+          },
           "qty": {
             "oneOf": [
-              { "type": "number" },
-              { "type": "string", "description": "Numeric string accepted by server (coerced via Number())." }
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "description": "Numeric string accepted by server and coerced with Number()."
+              }
             ]
           },
-          "unitPrice": { "type": "number" },
-          "description": { "type": "string" }
-        },
-        "required": ["item", "qty"]
+          "unitPrice": {
+            "type": "number"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
       },
-
       "PriceQuoteBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "priceQuote" },
-          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
-          "jobNumber": { "type": "string" },
+          "operation": {
+            "const": "priceQuote"
+          },
+          "readToken": {
+            "type": "string"
+          },
+          "jobNumber": {
+            "type": "string"
+          },
           "lines": {
             "type": "array",
             "minItems": 1,
-            "items": { "$ref": "#/components/schemas/PriceQuoteLine" }
+            "items": {
+              "$ref": "#/components/schemas/PriceQuoteLine"
+            }
           }
         },
-        "required": ["operation", "lines"]
+        "required": [
+          "operation",
+          "lines"
+        ]
       },
-
       "GetJobBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "getJob" },
-          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
-          "jobNumber": { "type": "string" },
-          "fields": { "type": "array", "items": { "type": "string" } }
+          "operation": {
+            "const": "getJob"
+          },
+          "readToken": {
+            "type": "string"
+          },
+          "jobNumber": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["operation", "jobNumber"]
+        "required": [
+          "operation",
+          "jobNumber"
+        ]
       },
-
       "GetItemBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "getItem" },
-          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
-          "itemCode": { "type": "string" },
-          "fields": { "type": "array", "items": { "type": "string" } }
+          "operation": {
+            "const": "getItem"
+          },
+          "readToken": {
+            "type": "string"
+          },
+          "itemCode": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["operation", "itemCode"]
+        "required": [
+          "operation",
+          "itemCode"
+        ]
       },
-
       "GetItemCostBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "getItemCost" },
-          "readToken": { "type": "string", "description": "Optional in body; may be supplied via query param readToken." },
-          "itemCode": { "type": "string" }
+          "operation": {
+            "const": "getItemCost"
+          },
+          "readToken": {
+            "type": "string"
+          },
+          "itemCode": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "itemCode"]
+        "required": [
+          "operation",
+          "itemCode"
+        ]
       },
-
       "SetJobFieldBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "setJobField" },
-          "jobNumber": { "type": "string" },
-          "fieldName": { "type": "string" },
-          "fieldValue": { "type": ["string", "number", "boolean", "null", "object", "array"] },
-          "requestedBy": { "type": "string" }
+          "operation": {
+            "const": "setJobField"
+          },
+          "jobNumber": {
+            "type": "string"
+          },
+          "fieldName": {
+            "type": "string"
+          },
+          "fieldValue": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null",
+              "object",
+              "array"
+            ]
+          },
+          "requestedBy": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "jobNumber", "fieldName", "requestedBy"]
+        "required": [
+          "operation",
+          "jobNumber",
+          "fieldName",
+          "requestedBy"
+        ]
       },
-
       "UpdateJobStatusBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "updateJobStatus" },
-          "jobNumber": { "type": "string" },
-          "newStatus": { "type": "string" },
-          "requestedBy": { "type": "string" },
-          "notes": { "type": "string" },
-          "requestedRole": { "type": "string" },
-          "confirmPhrase": { "type": "string" }
+          "operation": {
+            "const": "updateJobStatus"
+          },
+          "jobNumber": {
+            "type": "string"
+          },
+          "newStatus": {
+            "type": "string"
+          },
+          "requestedBy": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "requestedRole": {
+            "type": "string"
+          },
+          "confirmPhrase": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "jobNumber", "newStatus", "requestedBy"]
+        "required": [
+          "operation",
+          "jobNumber",
+          "newStatus",
+          "requestedBy"
+        ]
       },
-
       "CreateJobBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "createJob" },
-          "jobNumber": { "type": "string" },
-          "requestedBy": { "type": "string" },
-
-          "customerFullName": { "type": "string" },
-          "customerPhone": { "type": "string" },
-          "customerEmail": { "type": "string" },
-          "customerAddress": { "type": "string" },
-
-          "leadSource": { "type": "string" },
-          "customerType": { "type": "string" },
-          "estimator": { "type": "string" },
-
-          "notes": { "type": "string" }
+          "operation": {
+            "const": "createJob"
+          },
+          "jobNumber": {
+            "type": "string"
+          },
+          "requestedBy": {
+            "type": "string"
+          },
+          "customerFullName": {
+            "type": "string"
+          },
+          "customerPhone": {
+            "type": "string"
+          },
+          "customerEmail": {
+            "type": "string"
+          },
+          "customerAddress": {
+            "type": "string"
+          },
+          "leadSource": {
+            "type": "string"
+          },
+          "customerType": {
+            "type": "string"
+          },
+          "estimator": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "jobNumber", "requestedBy"]
+        "required": [
+          "operation",
+          "jobNumber",
+          "requestedBy"
+        ]
       },
-
       "UpdateItemCostBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "updateItemCost" },
-          "itemCode": { "type": "string" },
-          "newUnitCost": { "type": "number" },
-          "costEffectiveDate": { "type": "string" },
-          "requestedBy": { "type": "string" }
+          "operation": {
+            "const": "updateItemCost"
+          },
+          "itemCode": {
+            "type": "string"
+          },
+          "newUnitCost": {
+            "type": "number"
+          },
+          "costEffectiveDate": {
+            "type": "string"
+          },
+          "requestedBy": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "itemCode", "newUnitCost", "costEffectiveDate", "requestedBy"]
+        "required": [
+          "operation",
+          "itemCode",
+          "newUnitCost",
+          "costEffectiveDate",
+          "requestedBy"
+        ]
       },
-
       "UpdateItemFieldBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "updateItemField" },
-          "itemCode": { "type": "string" },
-          "fieldName": { "type": "string" },
-          "fieldValue": { "type": ["string", "number", "boolean", "null", "object", "array"] },
-          "requestedBy": { "type": "string" }
+          "operation": {
+            "const": "updateItemField"
+          },
+          "itemCode": {
+            "type": "string"
+          },
+          "fieldName": {
+            "type": "string"
+          },
+          "fieldValue": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null",
+              "object",
+              "array"
+            ]
+          },
+          "requestedBy": {
+            "type": "string"
+          }
         },
-        "required": ["operation", "itemCode", "fieldName", "requestedBy"]
+        "required": [
+          "operation",
+          "itemCode",
+          "fieldName",
+          "requestedBy"
+        ]
       },
-
       "CreateItemBody": {
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "operation": { "const": "createItem" },
-          "itemCode": { "type": "string" },
-          "itemName": { "type": "string" },
-          "unitCost": { "type": "number" },
-          "costEffectiveDate": { "type": "string" },
-          "requestedBy": { "type": "string" },
-
-          "category": { "type": "string" },
-          "unitOfMeasure": { "type": "string" },
-          "sourceType": { "type": "string" },
-          "activeStatus": { "type": ["string", "boolean"] }
+          "operation": {
+            "const": "createItem"
+          },
+          "itemCode": {
+            "type": "string"
+          },
+          "itemName": {
+            "type": "string"
+          },
+          "unitCost": {
+            "type": "number"
+          },
+          "costEffectiveDate": {
+            "type": "string"
+          },
+          "requestedBy": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "unitOfMeasure": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "activeStatus": {
+            "type": [
+              "string",
+              "boolean"
+            ]
+          }
         },
         "required": [
           "operation",
@@ -207,34 +391,58 @@
           "activeStatus"
         ]
       },
-
-      "OperationBody": {
-        "oneOf": [
-          { "$ref": "#/components/schemas/PriceQuoteBody" },
-          { "$ref": "#/components/schemas/GetJobBody" },
-          { "$ref": "#/components/schemas/GetItemBody" },
-          { "$ref": "#/components/schemas/GetItemCostBody" },
-          { "$ref": "#/components/schemas/SetJobFieldBody" },
-          { "$ref": "#/components/schemas/UpdateJobStatusBody" },
-          { "$ref": "#/components/schemas/CreateJobBody" },
-          { "$ref": "#/components/schemas/UpdateItemCostBody" },
-          { "$ref": "#/components/schemas/UpdateItemFieldBody" },
-          { "$ref": "#/components/schemas/CreateItemBody" }
-        ]
-      },
-
       "RequestEnvelope": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "body": { "$ref": "#/components/schemas/OperationBody" }
+          "body": {
+            "$ref": "#/components/schemas/RequestPayload"
+          }
         },
-        "required": ["body"]
+        "required": [
+          "body"
+        ]
+      },
+      "RequestPayload": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PriceQuoteBody"
+          },
+          {
+            "$ref": "#/components/schemas/GetJobBody"
+          },
+          {
+            "$ref": "#/components/schemas/GetItemBody"
+          },
+          {
+            "$ref": "#/components/schemas/GetItemCostBody"
+          },
+          {
+            "$ref": "#/components/schemas/SetJobFieldBody"
+          },
+          {
+            "$ref": "#/components/schemas/UpdateJobStatusBody"
+          },
+          {
+            "$ref": "#/components/schemas/CreateJobBody"
+          },
+          {
+            "$ref": "#/components/schemas/UpdateItemCostBody"
+          },
+          {
+            "$ref": "#/components/schemas/UpdateItemFieldBody"
+          },
+          {
+            "$ref": "#/components/schemas/CreateItemBody"
+          }
+        ]
       }
     }
   },
   "security": [
-    { "XAlfApiKey": [] }
+    {
+      "XAlfApiKey": []
+    }
   ],
   "paths": {
     "/macros/s/{deploymentId}/exec": {
@@ -246,14 +454,18 @@
             "name": "deploymentId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "readToken",
             "in": "query",
             "required": false,
-            "schema": { "type": "string" },
-            "description": "Read token for read operations. Server accepts readToken in query or body."
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for READ operations only. You may provide it as query (?readToken=...) or body.readToken; server enforces read token on read operations."
           }
         ],
         "requestBody": {
@@ -262,10 +474,13 @@
             "application/json": {
               "schema": {
                 "oneOf": [
-                  { "$ref": "#/components/schemas/RequestEnvelope" },
-                  { "$ref": "#/components/schemas/OperationBody" }
-                ],
-                "description": "Code.gs accepts both wrapped ({\"body\":{...}}) and unwrapped ({...}) JSON payloads."
+                  {
+                    "$ref": "#/components/schemas/RequestEnvelope"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RequestPayload"
+                  }
+                ]
               }
             }
           }
@@ -275,7 +490,9 @@
             "description": "Apps Script response (typically HTTP 200 with business outcome in JSON).",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
               }
             }
           },
@@ -283,7 +500,9 @@
             "description": "Unexpected response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/StandardResponse"
+                }
               }
             }
           }
