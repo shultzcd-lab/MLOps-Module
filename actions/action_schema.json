@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ALF Google Sheets API (Apps Script)",
-    "version": "1.0.2",
-    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nKey contract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken).\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
+    "version": "1.0.3",
+    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nContract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). In this schema, readToken is REQUIRED in the JSON body for read ops.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
   },
   "servers": [
     {
@@ -37,12 +37,16 @@
       "PriceQuoteLine": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Flexible line schema. Server requires non-empty lines[] and coerces qty using Number(), so numeric strings are accepted.",
         "properties": {
           "itemCode": { "type": "string" },
           "qty": {
             "oneOf": [
               { "type": "number" },
-              { "type": "string", "description": "Numeric string accepted by server and coerced with Number()." }
+              {
+                "type": "string",
+                "description": "Numeric string accepted by server (coerced via Number())."
+              }
             ]
           },
           "unitPrice": { "type": "number" },
@@ -140,6 +144,7 @@
       "CreateJobBody": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Field names aligned to what Code.gs reads (customerFullName, customerAddress, etc.).",
         "properties": {
           "operation": { "const": "createJob" },
           "jobNumber": { "type": "string" },
@@ -190,6 +195,7 @@
       "CreateItemBody": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Required fields include those Code.gs treats as required: category, unitOfMeasure, sourceType, activeStatus.",
         "properties": {
           "operation": { "const": "createItem" },
           "itemCode": { "type": "string" },
@@ -253,14 +259,15 @@
             "name": "deploymentId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string" },
+            "description": "Apps Script deployment ID. For runtime use, prefer hardcoding the real URL in your GPT Action config."
           },
           {
             "name": "readToken",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": { "type": "string" },
-            "description": "Required for READ operations. If you pass it in body.readToken instead, you can still include it here; server enforces readToken regardless."
+            "description": "Optional here because readToken is enforced via body.readToken for read operations. Server will accept query or body."
           }
         ],
         "requestBody": {
