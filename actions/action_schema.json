@@ -1,91 +1,322 @@
-openapi: 3.1.0 
-info:
-  title: ALF Apps Script Bridge
-  version: 1.0.1
-servers:
-  - url: https://script.google.com
-paths:
-  /macros/s/............./exec:
-    post:
-      operationId: alfBridgePost
-      summary: Call ALF Apps Script bridge
-      description: >
-        Posts JSON to Apps Script doPost(e). READ authorization is provided via the X-ALF-READ-TOKEN header (configured
-        in Action Authentication). Do NOT include readToken in the request body unless explicitly testing fallback.
-      x-openai-isConsequential: false
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required:
-                - body
-              properties:
-                body:
-                  type: object
-                  description: JSON payload consumed by dispatch(payload) in Apps Script.
-                  additionalProperties: true
-                  required:
-                    - operation
-                  properties:
-                    operation:
-                      type: string
-                      description: Operation name handled by dispatch().
-                      example: priceQuote
-                    readToken:
-                      type: string
-                      description: >
-                        Optional fallback ONLY. Normally omit because token is sent in X-ALF-READ-TOKEN header by Action
-                        Authentication.
-                    jobNumber:
-                      type: string
-                    itemCode:
-                      type: string
-                    fieldName:
-                      type: string
-                    fieldValue:
-                      description: Value to set (string/number/bool/date string).
-                    lines:
-                      type: array
-                      items:
-                        type: object
-                        additionalProperties: false
-                        required:
-                          - item
-                          - qty
-                        properties:
-                          item:
-                            type: string
-                          qty:
-                            type: number
-      responses:
-        "200":
-          description: JSON response from Apps Script
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                properties:
-                  result:
-                    type: string
-                  operation:
-                    type: string
-                  message:
-                    type: string
-        "400":
-          description: Error
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-                properties:
-                  result:
-                    type: string
-                  message:
-                    type: string
-                  error:
-                    type: string
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ALF Google Sheets API (Apps Script)",
+    "version": "1.0.0",
+    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nKey contract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). The script does NOT consume X-ALF-READ-TOKEN header unless you add that support in Code.gs.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint."
+  },
+  "servers": [
+    {
+      "url": "https://script.google.com",
+      "description": "Replace with your full Apps Script web app URL, e.g. https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "XAlfApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-ALF-KEY",
+        "description": "Required for all POST requests. Must match ALF_API_KEY enforced by the Apps Script. The script may accept alternate header spellings (x-alf-key, x_api_key, x-api-key), but this schema standardizes on X-ALF-KEY."
+      }
+    },
+    "schemas": {
+      "StandardResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Business outcome. Typically SUCCESS or REJECTED (per current Apps Script behavior)."
+          },
+          "operation": { "type": "string" },
+          "message": { "type": "string" },
+          "data": {
+            "type": ["object", "array", "string", "number", "boolean", "null"],
+            "description": "Operation-specific payload returned by the Apps Script."
+          }
+        }
+      },
+
+      "BaseBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "The operation name the Apps Script dispatcher routes to. Known operations include: priceQuote, getJob, getItem, getItemCost, setJobField, updateJobStatus, createJob, updateItemCost, updateItemField, createItem."
+          },
+          "readToken": {
+            "type": "string",
+            "description": "Read token for READ operations. The script validates readToken from query (?readToken=...) or body.readToken."
+          }
+        },
+        "required": ["operation"]
+      },
+
+      "PriceQuoteBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "priceQuote" },
+          "readToken": { "type": "string" },
+          "jobNumber": { "type": "string" },
+          "lines": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true },
+            "description": "Quote line items. Keep flexible unless you want to enforce a strict line schema."
+          }
+        },
+        "required": ["operation", "jobNumber"]
+      },
+
+      "GetJobBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "getJob" },
+          "readToken": { "type": "string" },
+          "jobNumber": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional field whitelist supported by the Apps Script (if implemented)."
+          }
+        },
+        "required": ["operation", "jobNumber"]
+      },
+
+      "GetItemBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "getItem" },
+          "readToken": { "type": "string" },
+          "itemCode": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional field whitelist supported by the Apps Script (if implemented)."
+          }
+        },
+        "required": ["operation", "itemCode"]
+      },
+
+      "GetItemCostBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "getItemCost" },
+          "readToken": { "type": "string" },
+          "itemCode": { "type": "string" }
+        },
+        "required": ["operation", "itemCode"]
+      },
+
+      "SetJobFieldBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "setJobField" },
+          "jobNumber": { "type": "string" },
+          "fieldName": { "type": "string" },
+          "fieldValue": {
+            "type": ["string", "number", "boolean", "null", "object", "array"],
+            "description": "Value to write. Keep broad to support different sheet field types."
+          },
+          "requestedBy": { "type": "string" }
+        },
+        "required": ["operation", "jobNumber", "fieldName", "requestedBy"]
+      },
+
+      "UpdateJobStatusBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "updateJobStatus" },
+          "jobNumber": { "type": "string" },
+          "newStatus": { "type": "string" },
+          "requestedBy": { "type": "string" },
+          "notes": { "type": "string" },
+          "requestedRole": { "type": "string" },
+          "confirmPhrase": { "type": "string" }
+        },
+        "required": ["operation", "jobNumber", "newStatus", "requestedBy"]
+      },
+
+      "CreateJobBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "createJob" },
+          "jobNumber": { "type": "string" },
+          "requestedBy": { "type": "string" },
+
+          "customerName": { "type": "string" },
+          "customerPhone": { "type": "string" },
+          "customerEmail": { "type": "string" },
+          "jobAddress": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "required": ["operation", "jobNumber", "requestedBy"]
+      },
+
+      "UpdateItemCostBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "updateItemCost" },
+          "itemCode": { "type": "string" },
+          "newCost": { "type": "number" },
+          "effectiveDate": {
+            "type": "string",
+            "description": "Date string the script expects (often YYYY-MM-DD). Keep as string unless Code.gs enforces a format."
+          },
+          "requestedBy": { "type": "string" }
+        },
+        "required": ["operation", "itemCode", "newCost", "effectiveDate", "requestedBy"]
+      },
+
+      "UpdateItemFieldBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "updateItemField" },
+          "itemCode": { "type": "string" },
+          "fieldName": { "type": "string" },
+          "fieldValue": {
+            "type": ["string", "number", "boolean", "null", "object", "array"]
+          },
+          "requestedBy": { "type": "string" }
+        },
+        "required": ["operation", "itemCode", "fieldName", "requestedBy"]
+      },
+
+      "CreateItemBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "const": "createItem" },
+          "itemCode": { "type": "string" },
+          "itemName": { "type": "string" },
+          "unitCost": { "type": "number" },
+          "costEffectiveDate": { "type": "string" },
+          "requestedBy": { "type": "string" }
+        },
+        "required": ["operation", "itemCode", "itemName", "unitCost", "costEffectiveDate", "requestedBy"]
+      },
+
+      "GenericBody": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "operation": { "type": "string" },
+          "readToken": { "type": "string" }
+        },
+        "required": ["operation"],
+        "description": "Fallback schema if Code.gs contains additional operations not yet modeled. Keeps Actions unblocked while you iterate."
+      },
+
+      "RequestEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "Apps Script expects a JSON payload and often reads from a nested body object. This matches the pattern already used in your schema.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/PriceQuoteBody" },
+              { "$ref": "#/components/schemas/GetJobBody" },
+              { "$ref": "#/components/schemas/GetItemBody" },
+              { "$ref": "#/components/schemas/GetItemCostBody" },
+              { "$ref": "#/components/schemas/SetJobFieldBody" },
+              { "$ref": "#/components/schemas/UpdateJobStatusBody" },
+              { "$ref": "#/components/schemas/CreateJobBody" },
+              { "$ref": "#/components/schemas/UpdateItemCostBody" },
+              { "$ref": "#/components/schemas/UpdateItemFieldBody" },
+              { "$ref": "#/components/schemas/CreateItemBody" },
+              { "$ref": "#/components/schemas/GenericBody" }
+            ]
+          }
+        },
+        "required": ["body"]
+      }
+    }
+  },
+  "security": [
+    { "XAlfApiKey": [] }
+  ],
+  "paths": {
+    "/macros/s/{deploymentId}/exec": {
+      "post": {
+        "operationId": "alfSheetsDispatcher",
+        "summary": "Dispatch ALF operations to Apps Script (read/write)",
+        "description": "Calls the Apps Script web app dispatcher.\n\nAuth:\n- Always send X-ALF-KEY header.\n\nRead token:\n- For read operations (e.g., getJob/getItem/getItemCost/priceQuote), provide readToken either as query param (?readToken=...) or in JSON body as body.readToken.\n\nResponse:\n- Apps Script typically returns HTTP 200 with a JSON body indicating SUCCESS/REJECTED.",
+        "parameters": [
+          {
+            "name": "deploymentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Your Apps Script deployment ID. If you prefer, replace the entire server+path with a fixed URL and remove this parameter."
+          },
+          {
+            "name": "readToken",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Read token for READ operations. The script validates from query or body."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RequestEnvelope" },
+              "examples": {
+                "getJob_read": {
+                  "summary": "Read a job (readToken in query)",
+                  "value": {
+                    "body": {
+                      "operation": "getJob",
+                      "jobNumber": "J-1001"
+                    }
+                  }
+                },
+                "updateItemCost_write": {
+                  "summary": "Write operation (API key required; no readToken needed unless script enforces it)",
+                  "value": {
+                    "body": {
+                      "operation": "updateItemCost",
+                      "itemCode": "ITEM-1",
+                      "newCost": 42.5,
+                      "effectiveDate": "2026-02-21",
+                      "requestedBy": "ops.bot"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Apps Script response (business success or rejection is typically in JSON fields, not HTTP status).",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
