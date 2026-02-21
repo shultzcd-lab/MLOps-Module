@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ALF Google Sheets API (Apps Script)",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nContract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). In this schema, readToken is REQUIRED in the JSON body for read ops.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
   },
   "servers": [
@@ -37,21 +37,19 @@
       "PriceQuoteLine": {
         "type": "object",
         "additionalProperties": true,
-        "description": "Flexible line schema. Server requires non-empty lines[] and coerces qty using Number(), so numeric strings are accepted.",
+        "description": "Flexible line schema. Server requires non-empty lines[] and uses line.item (not itemCode). qty may be coerced with Number().",
         "properties": {
-          "itemCode": { "type": "string" },
+          "item": { "type": "string", "description": "Required item identifier per Apps Script (line.item)." },
           "qty": {
             "oneOf": [
               { "type": "number" },
-              {
-                "type": "string",
-                "description": "Numeric string accepted by server (coerced via Number())."
-              }
+              { "type": "string", "description": "Numeric string accepted by server (coerced via Number())." }
             ]
           },
           "unitPrice": { "type": "number" },
           "description": { "type": "string" }
-        }
+        },
+        "required": ["item", "qty"]
       },
 
       "PriceQuoteBody": {
@@ -77,10 +75,7 @@
           "operation": { "const": "getJob" },
           "readToken": { "type": "string" },
           "jobNumber": { "type": "string" },
-          "fields": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
+          "fields": { "type": "array", "items": { "type": "string" } }
         },
         "required": ["operation", "readToken", "jobNumber"]
       },
@@ -92,10 +87,7 @@
           "operation": { "const": "getItem" },
           "readToken": { "type": "string" },
           "itemCode": { "type": "string" },
-          "fields": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
+          "fields": { "type": "array", "items": { "type": "string" } }
         },
         "required": ["operation", "readToken", "itemCode"]
       },
@@ -118,9 +110,7 @@
           "operation": { "const": "setJobField" },
           "jobNumber": { "type": "string" },
           "fieldName": { "type": "string" },
-          "fieldValue": {
-            "type": ["string", "number", "boolean", "null", "object", "array"]
-          },
+          "fieldValue": { "type": ["string", "number", "boolean", "null", "object", "array"] },
           "requestedBy": { "type": "string" }
         },
         "required": ["operation", "jobNumber", "fieldName", "requestedBy"]
@@ -170,11 +160,11 @@
         "properties": {
           "operation": { "const": "updateItemCost" },
           "itemCode": { "type": "string" },
-          "newCost": { "type": "number" },
-          "effectiveDate": { "type": "string" },
+          "newUnitCost": { "type": "number", "description": "Matches Apps Script expected field name." },
+          "costEffectiveDate": { "type": "string", "description": "Matches Apps Script expected field name (date string)." },
           "requestedBy": { "type": "string" }
         },
-        "required": ["operation", "itemCode", "newCost", "effectiveDate", "requestedBy"]
+        "required": ["operation", "itemCode", "newUnitCost", "costEffectiveDate", "requestedBy"]
       },
 
       "UpdateItemFieldBody": {
@@ -184,9 +174,7 @@
           "operation": { "const": "updateItemField" },
           "itemCode": { "type": "string" },
           "fieldName": { "type": "string" },
-          "fieldValue": {
-            "type": ["string", "number", "boolean", "null", "object", "array"]
-          },
+          "fieldValue": { "type": ["string", "number", "boolean", "null", "object", "array"] },
           "requestedBy": { "type": "string" }
         },
         "required": ["operation", "itemCode", "fieldName", "requestedBy"]
@@ -195,7 +183,6 @@
       "CreateItemBody": {
         "type": "object",
         "additionalProperties": true,
-        "description": "Required fields include those Code.gs treats as required: category, unitOfMeasure, sourceType, activeStatus.",
         "properties": {
           "operation": { "const": "createItem" },
           "itemCode": { "type": "string" },
@@ -267,7 +254,7 @@
             "in": "query",
             "required": false,
             "schema": { "type": "string" },
-            "description": "Optional here because readToken is enforced via body.readToken for read operations. Server will accept query or body."
+            "description": "Optional here because readToken is enforced via body.readToken for read operations. Server accepts query or body."
           }
         ],
         "requestBody": {
