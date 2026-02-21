@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "ALF Google Sheets API (Apps Script)",
-    "version": "1.0.0",
-    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nKey contract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). The script does NOT consume X-ALF-READ-TOKEN header unless you add that support in Code.gs.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint."
+    "version": "1.0.1",
+    "description": "ChatGPT Actions schema aligned to the current Apps Script implementation in apps_script/Code.gs.\n\nKey contract notes:\n- All POST requests require an API key header (X-ALF-KEY) that must match the script's ALF_API_KEY.\n- Read operations require a read token provided via query param (?readToken=...) or JSON body field (body.readToken). The script does NOT consume X-ALF-READ-TOKEN header unless you add that support in Code.gs.\n- The Apps Script typically returns HTTP 200 with a JSON body describing SUCCESS/REJECTED; do not assume HTTP 4xx for business-rule rejections.\n\nIMPORTANT: Update the server URL below to your real deployed Apps Script /exec endpoint (in your private runtime config if you prefer)."
   },
   "servers": [
     {
@@ -38,20 +38,16 @@
         }
       },
 
-      "BaseBody": {
+      "PriceQuoteLine": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Flexible line schema. Server requires a non-empty lines[] but may not enforce strict shape.",
         "properties": {
-          "operation": {
-            "type": "string",
-            "description": "The operation name the Apps Script dispatcher routes to. Known operations include: priceQuote, getJob, getItem, getItemCost, setJobField, updateJobStatus, createJob, updateItemCost, updateItemField, createItem."
-          },
-          "readToken": {
-            "type": "string",
-            "description": "Read token for READ operations. The script validates readToken from query (?readToken=...) or body.readToken."
-          }
-        },
-        "required": ["operation"]
+          "itemCode": { "type": "string" },
+          "qty": { "type": "number" },
+          "unitPrice": { "type": "number" },
+          "description": { "type": "string" }
+        }
       },
 
       "PriceQuoteBody": {
@@ -60,14 +56,15 @@
         "properties": {
           "operation": { "const": "priceQuote" },
           "readToken": { "type": "string" },
-          "jobNumber": { "type": "string" },
+          "jobNumber": { "type": "string", "description": "Optional per server behavior." },
           "lines": {
             "type": "array",
-            "items": { "type": "object", "additionalProperties": true },
-            "description": "Quote line items. Keep flexible unless you want to enforce a strict line schema."
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/PriceQuoteLine" },
+            "description": "REQUIRED by server. Must be non-empty."
           }
         },
-        "required": ["operation", "jobNumber"]
+        "required": ["operation", "lines"]
       },
 
       "GetJobBody": {
@@ -147,15 +144,21 @@
       "CreateJobBody": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Field names aligned to what Code.gs reads (customerFullName, customerAddress, etc.).",
         "properties": {
           "operation": { "const": "createJob" },
           "jobNumber": { "type": "string" },
           "requestedBy": { "type": "string" },
 
-          "customerName": { "type": "string" },
+          "customerFullName": { "type": "string" },
           "customerPhone": { "type": "string" },
           "customerEmail": { "type": "string" },
-          "jobAddress": { "type": "string" },
+          "customerAddress": { "type": "string" },
+
+          "leadSource": { "type": "string" },
+          "customerType": { "type": "string" },
+          "estimator": { "type": "string" },
+
           "notes": { "type": "string" }
         },
         "required": ["operation", "jobNumber", "requestedBy"]
@@ -195,15 +198,35 @@
       "CreateItemBody": {
         "type": "object",
         "additionalProperties": true,
+        "description": "Required fields include the additional items Code.gs treats as required: category, unitOfMeasure, sourceType, activeStatus.",
         "properties": {
           "operation": { "const": "createItem" },
           "itemCode": { "type": "string" },
           "itemName": { "type": "string" },
           "unitCost": { "type": "number" },
           "costEffectiveDate": { "type": "string" },
-          "requestedBy": { "type": "string" }
+          "requestedBy": { "type": "string" },
+
+          "category": { "type": "string" },
+          "unitOfMeasure": { "type": "string" },
+          "sourceType": { "type": "string" },
+          "activeStatus": {
+            "type": ["string", "boolean"],
+            "description": "Whatever your script expects. If it treats this as a string enum, keep it string. If boolean, pass true/false."
+          }
         },
-        "required": ["operation", "itemCode", "itemName", "unitCost", "costEffectiveDate", "requestedBy"]
+        "required": [
+          "operation",
+          "itemCode",
+          "itemName",
+          "unitCost",
+          "costEffectiveDate",
+          "requestedBy",
+          "category",
+          "unitOfMeasure",
+          "sourceType",
+          "activeStatus"
+        ]
       },
 
       "GenericBody": {
@@ -222,7 +245,7 @@
         "additionalProperties": false,
         "properties": {
           "body": {
-            "description": "Apps Script expects a JSON payload and often reads from a nested body object. This matches the pattern already used in your schema.",
+            "description": "Apps Script expects a JSON payload and often reads from a nested body object.",
             "oneOf": [
               { "$ref": "#/components/schemas/PriceQuoteBody" },
               { "$ref": "#/components/schemas/GetJobBody" },
@@ -257,7 +280,7 @@
             "in": "path",
             "required": true,
             "schema": { "type": "string" },
-            "description": "Your Apps Script deployment ID. If you prefer, replace the entire server+path with a fixed URL and remove this parameter."
+            "description": "Your Apps Script deployment ID. For runtime use, prefer hardcoding the real URL in your Action config and using /exec without this param."
           },
           {
             "name": "readToken",
@@ -282,15 +305,32 @@
                     }
                   }
                 },
-                "updateItemCost_write": {
-                  "summary": "Write operation (API key required; no readToken needed unless script enforces it)",
+                "priceQuote_read": {
+                  "summary": "Price quote (lines required by server)",
                   "value": {
                     "body": {
-                      "operation": "updateItemCost",
+                      "operation": "priceQuote",
+                      "jobNumber": "J-1001",
+                      "lines": [
+                        { "itemCode": "ITEM-1", "qty": 1, "unitPrice": 42.5 }
+                      ]
+                    }
+                  }
+                },
+                "createItem_write": {
+                  "summary": "Create item (script-required fields included)",
+                  "value": {
+                    "body": {
+                      "operation": "createItem",
                       "itemCode": "ITEM-1",
-                      "newCost": 42.5,
-                      "effectiveDate": "2026-02-21",
-                      "requestedBy": "ops.bot"
+                      "itemName": "Fence Panel",
+                      "unitCost": 42.5,
+                      "costEffectiveDate": "2026-02-21",
+                      "requestedBy": "ops.bot",
+                      "category": "Materials",
+                      "unitOfMeasure": "EA",
+                      "sourceType": "Internal",
+                      "activeStatus": true
                     }
                   }
                 }
