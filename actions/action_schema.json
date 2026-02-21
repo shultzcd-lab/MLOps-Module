@@ -1,0 +1,91 @@
+openapi: 3.1.0 
+info:
+  title: ALF Apps Script Bridge
+  version: 1.0.1
+servers:
+  - url: https://script.google.com
+paths:
+  /macros/s/............./exec:
+    post:
+      operationId: alfBridgePost
+      summary: Call ALF Apps Script bridge
+      description: >
+        Posts JSON to Apps Script doPost(e). READ authorization is provided via the X-ALF-READ-TOKEN header (configured
+        in Action Authentication). Do NOT include readToken in the request body unless explicitly testing fallback.
+      x-openai-isConsequential: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - body
+              properties:
+                body:
+                  type: object
+                  description: JSON payload consumed by dispatch(payload) in Apps Script.
+                  additionalProperties: true
+                  required:
+                    - operation
+                  properties:
+                    operation:
+                      type: string
+                      description: Operation name handled by dispatch().
+                      example: priceQuote
+                    readToken:
+                      type: string
+                      description: >
+                        Optional fallback ONLY. Normally omit because token is sent in X-ALF-READ-TOKEN header by Action
+                        Authentication.
+                    jobNumber:
+                      type: string
+                    itemCode:
+                      type: string
+                    fieldName:
+                      type: string
+                    fieldValue:
+                      description: Value to set (string/number/bool/date string).
+                    lines:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - item
+                          - qty
+                        properties:
+                          item:
+                            type: string
+                          qty:
+                            type: number
+      responses:
+        "200":
+          description: JSON response from Apps Script
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  result:
+                    type: string
+                  operation:
+                    type: string
+                  message:
+                    type: string
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  result:
+                    type: string
+                  message:
+                    type: string
+                  error:
+                    type: string
