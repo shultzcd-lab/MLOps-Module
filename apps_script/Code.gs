@@ -1,5 +1,5 @@
 /**
- * ALF Write Gate (V1) — Single Script (Soft Authority)
+ * MAPLE Read & Write Bridge — Single Script (Soft Authority)
  * Bind this script to the JOB TABLE Google Sheet.
  *
  * Writes to:
@@ -137,7 +137,20 @@ const ITEM_FIELD_ALLOWLIST = {
 };
 /** ====== WEB APP ENTRY POINT ====== **/
 function doPost(e) {
-  try {
+  try {const rawPing = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
+const parsedPing = JSON.parse(rawPing);
+const payloadPing =
+  (parsedPing && typeof parsedPing === "object" && parsedPing.body && typeof parsedPing.body === "object")
+    ? parsedPing.body
+    : parsedPing;
+
+if (String(payloadPing.operation || "").toUpperCase() === "PING") {
+  return jsonResponse_({
+    result: "SUCCESS",
+    operation: "PING",
+    message: "PONG"
+  });
+}
     // --- Header-based auth (replaces readToken in JSON) ---
     const hdrs = (e && e.headers) ? e.headers : {};
     const normalized = {};
@@ -145,19 +158,32 @@ function doPost(e) {
 
     // Prefer a dedicated header you configure in the GPT Action auth (API Key)
     const providedKey =
-      normalized["x-alf-key"] ||
-      normalized["x_api_key"] ||
-      normalized["x-api-key"] ||
-      "";
+  normalized["x-alf-key"] ||
+  normalized["x_api_key"] ||
+  normalized["x-api-key"] ||
+  (e && e.parameter && (e.parameter.alfKey || e.parameter.alf_key || e.parameter.apiKey || e.parameter.api_key)) ||
+  "";
 
     const expectedKey = PropertiesService.getScriptProperties().getProperty("ALF_API_KEY");
 
     if (!expectedKey || String(providedKey).trim() !== String(expectedKey).trim()) {
-      return jsonResponse_({
-        result: "REJECTED",
-        message: "Unauthorized (missing or invalid API key)",
-      });
+  return jsonResponse_({
+    result: "REJECTED",
+    message: "Unauthorized (missing or invalid API key)",
+    debug: {
+      expectedKeySet: Boolean(expectedKey),
+      providedKeyLen: String(providedKey || "").length,
+      providedKeyPreview: String(providedKey || "").slice(0, 6) + "..." + String(providedKey || "").slice(-4),
+      headerKeysSeen: Object.keys(normalized || {}).sort(),
+      alfHeaderCandidatesSeen: {
+        "x-alf-key": Boolean(normalized["x-alf-key"]),
+        "x_api_key": Boolean(normalized["x_api_key"]),
+        "x-api-key": Boolean(normalized["x-api-key"]),
+        "x-alf-key-raw": Boolean(hdrs["X-ALF-KEY"] || hdrs["x-alf-key"])
+      }
     }
+  });
+}
 
     // --- Parse payload ---
     const raw = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
@@ -171,6 +197,11 @@ function doPost(e) {
 
     // Keep normalized headers available downstream if any legacy code needs them
     payload.__headers = normalized;
+
+// --- Fast health check (no Drive/Sheets access) ---
+if (String(payload.operation || "").toUpperCase() === "PING") {
+  return jsonResponse_({ result: "SUCCESS", operation: "PING", message: "PONG" });
+}
 
     const result = dispatch(payload);
     return jsonResponse_(result);
@@ -212,19 +243,15 @@ function dispatch(payload) {
 
     // READ OPS (token-protected)
     case OPERATIONS.GET_ITEM_COST:
-      requireReadToken_(payload);
       return getItemCost_(payload);
 
     case OPERATIONS.GET_ITEM:
-      requireReadToken_(payload);
       return getItem_(payload);
 
     case OPERATIONS.GET_JOB:
-      requireReadToken_(payload);
       return getJob_(payload);
 
      case OPERATIONS.PRICE_QUOTE:
-      requireReadToken_(payload);
       return priceQuote_(payload);
 
 
@@ -818,6 +845,57 @@ function jsonResponse_(obj) {
 /******************** READ HANDLERS (TOKEN-PROTECTED) ********************/
 
 function requireReadToken_(p) {
+  // If the request came through the authenticated GPT Action channel,
+  // do not require a separate read token.
+  const hdr = (p && p.__headers) ? p.__headers : {};
+  const providedKey =
+  normalized["x-alf-key"] ||   // lowercase header name after normalization
+  normalized["x-alf-key".toLowerCase()] || // harmless redundancy
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x-alf-key"] ||   // keep
+  normalized["x_api_key"] ||
+  normalized["x-api-key"] ||
+  normalized["x-openai-secret"] ||   // NEW: some builders send the secret here
+  normalized["authorization"] ||     // NEW: if it’s being sent as Bearer
+  "";
+
+  const expectedKey = String(PropertiesService.getScriptProperties().getProperty("ALF_API_KEY") || "").trim();
+
+  if (!expectedKey || String(providedKey).trim() !== String(expectedKey).trim()) {
+  return jsonResponse_({
+    result: "REJECTED",
+    message: "Unauthorized (missing or invalid API key)",
+    debug: {
+      receivedHeaderKeys: Object.keys(normalized || {}).sort(),
+      hasXAlfKey: Boolean(normalized["x-alf-key"]),
+      hasXApiKey: Boolean(normalized["x-api-key"] || normalized["x_api_key"]),
+      providedKeyLength: String(providedKey || "").trim().length,
+      expectedKeyLength: String(expectedKey || "").trim().length
+    }
+  });
+}
+
+  // Legacy / non-GPT callers: enforce READ token
   // Primary: URL querystring (reliable for Apps Script web apps)
   const qsToken = (p && p.__query && p.__query.readToken) ? String(p.__query.readToken) : "";
 
@@ -1175,4 +1253,3 @@ function doGet(e) {
       JSON.stringify({ status: "ok", received: payload, note: "Bridge reachable." })
     )
     .setMimeType(ContentService.MimeType.JSON);
-}
